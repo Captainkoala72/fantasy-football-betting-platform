@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { ledger, users, STARTING_BALANCE_CENTS, type UserRow } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
@@ -54,10 +54,10 @@ export async function signUp(rawUsername: string, displayName: string, pin: stri
   const username = normalizeUsername(rawUsername);
   const err = validateCredentials(username, pin);
   if (err) return { error: err };
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+  const existing = await getDb().select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
   if (existing.length) return { error: "That username is taken. Sign in with your PIN instead." };
   const token = randomBytes(32).toString("hex");
-  const [user] = await db
+  const [user] = await getDb()
     .insert(users)
     .values({
       username,
@@ -67,7 +67,7 @@ export async function signUp(rawUsername: string, displayName: string, pin: stri
       balanceCents: STARTING_BALANCE_CENTS,
     })
     .returning();
-  await db.insert(ledger).values({
+  await getDb().insert(ledger).values({
     userId: user.id,
     kind: "deposit",
     amountCents: STARTING_BALANCE_CENTS,
@@ -79,11 +79,11 @@ export async function signUp(rawUsername: string, displayName: string, pin: stri
 
 export async function signIn(rawUsername: string, pin: string): Promise<{ user: UserRow } | { error: string }> {
   const username = normalizeUsername(rawUsername);
-  const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  const [user] = await getDb().select().from(users).where(eq(users.username, username)).limit(1);
   if (!user || !verifyPin(pin, user.pinHash)) return { error: "Username or PIN is incorrect." };
   // rotate session token on each sign-in
   const token = randomBytes(32).toString("hex");
-  const [updated] = await db
+  const [updated] = await getDb()
     .update(users)
     .set({ sessionToken: token, lastSeenAt: new Date() })
     .where(eq(users.id, user.id))
@@ -95,7 +95,7 @@ export async function getCurrentUser(): Promise<UserRow | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const [user] = await db.select().from(users).where(eq(users.sessionToken, token)).limit(1);
+  const [user] = await getDb().select().from(users).where(eq(users.sessionToken, token)).limit(1);
   return user ?? null;
 }
 

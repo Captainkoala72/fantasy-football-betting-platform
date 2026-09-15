@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { betLegs, bets, ledger, users, type UserRow } from "@/db/schema";
 import { getSnapshot, getWeekMatchups, priceWeek } from "@/lib/lines";
 import { americanToDecimal, decimalToAmerican, payoutCents } from "@/lib/odds/math";
@@ -108,7 +108,7 @@ export async function placeWagers(user: UserRow, wagers: PlaceBetInput[]): Promi
     prepared.push({ wager: { ...wager, stakeCents: stake }, legs, decimal, american, payout });
   }
 
-  return db.transaction(async (tx) => {
+  return getDb().transaction(async (tx) => {
     const [fresh] = await tx.select().from(users).where(eq(users.id, user.id)).for("update");
     if (!fresh) throw new BetError("auth", "Session expired. Please sign in again.");
     let balance = Number(fresh.balanceCents);
@@ -190,7 +190,7 @@ export async function settleOpenBets(opts: { force?: boolean } = {}): Promise<{ 
   }
   globalForSettle.__llLastSettle = now;
 
-  const openLegs = await db
+  const openLegs = await getDb()
     .select()
     .from(betLegs)
     .innerJoin(bets, eq(betLegs.betId, bets.id))
@@ -219,7 +219,7 @@ export async function settleOpenBets(opts: { force?: boolean } = {}): Promise<{ 
       result.homeScore,
       result.awayScore,
     );
-    await db
+    await getDb()
       .update(betLegs)
       .set({ status, homeScore: result.homeScore.toFixed(2), awayScore: result.awayScore.toFixed(2), settledAt: new Date() })
       .where(eq(betLegs.id, leg.id));
@@ -229,9 +229,9 @@ export async function settleOpenBets(opts: { force?: boolean } = {}): Promise<{ 
 
   let settledBets = 0;
   for (const betId of touchedBets) {
-    const legs = await db.select().from(betLegs).where(eq(betLegs.betId, betId));
+    const legs = await getDb().select().from(betLegs).where(eq(betLegs.betId, betId));
     if (legs.some((l) => l.status === "open")) continue;
-    const [bet] = await db.select().from(bets).where(eq(bets.id, betId));
+    const [bet] = await getDb().select().from(bets).where(eq(bets.id, betId));
     if (!bet || bet.status !== "open") continue;
 
     let status: "won" | "lost" | "push";
@@ -247,7 +247,7 @@ export async function settleOpenBets(opts: { force?: boolean } = {}): Promise<{ 
       payout = payoutCents(Number(bet.stakeCents), decimal);
     }
 
-    await db.transaction(async (tx) => {
+    await getDb().transaction(async (tx) => {
       await tx.update(bets).set({ status, payoutCents: payout, settledAt: new Date() }).where(eq(bets.id, betId));
       if (payout > 0) {
         const [u] = await tx.select().from(users).where(eq(users.id, bet.userId)).for("update");
@@ -305,9 +305,9 @@ export type BetWithLegs = {
 };
 
 export async function listUserBets(userId: number, limit = 200): Promise<BetWithLegs[]> {
-  const rows = await db.select().from(bets).where(eq(bets.userId, userId)).orderBy(desc(bets.placedAt)).limit(limit);
+  const rows = await getDb().select().from(bets).where(eq(bets.userId, userId)).orderBy(desc(bets.placedAt)).limit(limit);
   if (rows.length === 0) return [];
-  const legs = await db
+  const legs = await getDb()
     .select()
     .from(betLegs)
     .where(inArray(betLegs.betId, rows.map((r) => r.id)));
@@ -369,7 +369,7 @@ export type LeaderboardEntry = {
 };
 
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
-  const rows = await db
+  const rows = await getDb()
     .select({
       id: users.id,
       username: users.username,
@@ -420,7 +420,7 @@ export { americanToDecimal };
 export type LedgerPoint = { at: string; balanceAfterCents: number; amountCents: number; kind: string; note: string | null };
 
 export async function listLedger(userId: number, limit = 500): Promise<LedgerPoint[]> {
-  const rows = await db.select().from(ledger).where(eq(ledger.userId, userId)).orderBy(ledger.createdAt, ledger.id).limit(limit);
+  const rows = await getDb().select().from(ledger).where(eq(ledger.userId, userId)).orderBy(ledger.createdAt, ledger.id).limit(limit);
   return rows.map((r) => ({
     at: r.createdAt.toISOString(),
     balanceAfterCents: Number(r.balanceAfterCents),

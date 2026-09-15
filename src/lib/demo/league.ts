@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { appState } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { LeagueSnapshot, ScheduleResult } from "@/lib/espn/league";
@@ -80,7 +80,7 @@ function round2(n: number): number {
 
 export async function getDemoState(): Promise<DemoState> {
   try {
-    const rows = await db.select().from(appState).where(eq(appState.key, DEMO_STATE_KEY)).limit(1);
+    const rows = await getDb().select().from(appState).where(eq(appState.key, DEMO_STATE_KEY)).limit(1);
     const v = rows[0]?.value as Partial<DemoState> | undefined;
     if (v && typeof v.week === "number" && typeof v.epoch === "number") return { week: v.week, epoch: v.epoch };
   } catch {
@@ -93,7 +93,7 @@ export async function advanceDemoWeek(): Promise<DemoState> {
   const cur = await getDemoState();
   const next: DemoState =
     cur.week >= DEMO_REGULAR_SEASON_WEEKS ? { week: 1, epoch: cur.epoch + 1 } : { week: cur.week + 1, epoch: cur.epoch };
-  await db
+  await getDb()
     .insert(appState)
     .values({ key: DEMO_STATE_KEY, value: next, updatedAt: new Date() })
     .onConflictDoUpdate({ target: appState.key, set: { value: next, updatedAt: new Date() } });

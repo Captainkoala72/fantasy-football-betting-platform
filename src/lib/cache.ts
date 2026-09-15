@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { espnCache } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -42,7 +42,7 @@ export async function cachedFetch<T>(
         mem.set(key, { value, fetchedAt });
         if (persist) {
           try {
-            await db
+            await getDb()
               .insert(espnCache)
               .values({ key, payload: value as object, fetchedAt: new Date(fetchedAt) })
               .onConflictDoUpdate({
@@ -62,7 +62,7 @@ export async function cachedFetch<T>(
         }
         if (persist) {
           try {
-            const rows = await db.select().from(espnCache).where(eq(espnCache.key, key)).limit(1);
+            const rows = await getDb().select().from(espnCache).where(eq(espnCache.key, key)).limit(1);
             if (rows[0]) {
               const fetchedAt = rows[0].fetchedAt.getTime();
               mem.set(key, { value: rows[0].payload, fetchedAt });

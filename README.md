@@ -4,6 +4,25 @@ LeagueLines pulls your private ESPN Fantasy Football league through ESPN's unoff
 v3 API, converts every team's projections into spreads, totals, moneylines and team totals,
 and lets your league-mates bet on the matchups with a $10,000 play-money bankroll.
 
+## Deploy on Vercel
+
+1. Create a PostgreSQL database and copy its connection string.
+2. In Vercel, open your project settings and add `DATABASE_URL` under
+   **Environment Variables** for Production and any Preview environments you use.
+   Use the connection string supplied by your database provider, including its SSL settings.
+3. Locally, copy `.env.example` to `.env.local` and set `DATABASE_URL` to the database
+   you intend to deploy against. Run `npm ci`, then `npx drizzle-kit push` to apply
+   `src/db/schema.ts`. Review the proposed schema changes before accepting them.
+4. Deploy or redeploy the project. Environment-variable changes only apply to new
+   deployments. Verify `/api/health` returns a successful database check.
+
+Database initialization is deferred until runtime, so `npm run build` can complete
+without `DATABASE_URL`. A working database and the applied schema are still required
+for accounts, bets, caching, and demo-week state. Demo mode replaces ESPN data; it
+does not replace PostgreSQL.
+
+See [Vercel's environment-variable documentation](https://vercel.com/docs/environment-variables).
+
 ## Connect your league
 
 Add these environment variables (in `.env` or your host's secret manager):
